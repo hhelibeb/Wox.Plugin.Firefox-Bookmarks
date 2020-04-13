@@ -1,7 +1,7 @@
 # Wox.Plugin.Firefox-Bookmarks
 Firefox Bookmarks Search Plugin for Wox-launcher 
 
-## Install
+## Installation
 Install plugin with Wox.
 ```
 wpm install Firefox Bookmarks
