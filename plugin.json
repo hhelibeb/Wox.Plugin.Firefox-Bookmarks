@@ -1,0 +1,12 @@
+{
+  "ID":"7F01290F126143C9B004B82D690446E5",
+  "ActionKeyword":"ff",
+  "Name":"Firefox Bookmarks",
+  "Description":"Search Firefox Bookmarks",
+  "Author":"hhelibeb",
+  "Version":"1.0.0",
+  "Language":"python",
+  "Website":"https://github.com/hhelibeb/Wox.Plugin.Firefox-Bookmarks",
+  "IcoPath": "img\\Firefox.ico",
+  "ExecuteFileName":"firefox.py"
+}
