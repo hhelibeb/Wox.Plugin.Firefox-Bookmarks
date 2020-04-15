@@ -4,7 +4,7 @@
   "Name":"Firefox Bookmarks",
   "Description":"Search Firefox Bookmarks",
   "Author":"hhelibeb",
-  "Version":"1.0.0",
+  "Version":"1.0.1",
   "Language":"python",
   "Website":"https://github.com/hhelibeb/Wox.Plugin.Firefox-Bookmarks",
   "IcoPath": "img\\Firefox.ico",

@@ -3,9 +3,11 @@ from util import WoxEx, WoxAPI, load_module, Log
 with load_module():
     import sqlite3
     import configparser
+    import winreg
     import os
     import webbrowser
     import json
+    import browser
     from os import path
     from typing import List
 
@@ -39,6 +41,22 @@ class Main(WoxEx):
         results = self.get_results(db_path=db_path, sql=self.generate_sql(q))
         return results
 
+    def context_menu(self, data):
+
+        results = []
+        for browser_name in browser.PROGRAMS:
+            if browser.get_path(browser_name):
+                results.append({
+                    "Title": f"Open With {browser_name}",
+                    "SubTitle": str(data),
+                    "IcoPath": f"img\\{browser_name}.ico",
+                    'JsonRPCAction': {
+                        'method': 'open_url',
+                        'parameters': [str(data), browser_name]
+                    }
+                })
+        return results
+
     def get_db(self) -> str:
 
         dir = os.path.abspath(os.getcwd())
@@ -70,26 +88,25 @@ class Main(WoxEx):
         cond1 = f"'{keyword}%'"
         cond2 = f"'%{keyword}%'"
 
-        sql1 = f'''select b.title, visit_count, url 
-                     from moz_bookmarks as b 
-                     join moz_places    as p on b.fk = p.id
-                     where lower(b.title) like {cond1} 
-                     order by p.visit_count desc'''
-        sql2 = f'''select b.title, visit_count, url 
-                     from moz_bookmarks as b 
-                     join moz_places    as p on b.fk = p.id
-                     where lower(b.title) like {cond2} 
-                       and lower(b.title) not like {cond1} 
-                     order by p.visit_count desc'''
-        sql3 = f'''select b.title, visit_count, url 
-                     from moz_bookmarks as b 
-                     join moz_places    as p on b.fk = p.id
-                     where lower(p.url) like {cond2}  
-                     order by p.visit_count desc'''
-
-        results += [sql1]
-        results += [sql2]
-        results += [sql3]
+        results.append(f'''select b.title, visit_count, url, frecency, b.guid
+                              from moz_bookmarks as b
+                              join moz_places    as p on b.fk = p.id
+                              where lower(b.title) like {cond1}
+                              order by frecency desc '''
+                       )
+        results.append(f'''select b.title, visit_count, url, frecency, b.guid  
+                             from moz_bookmarks as b 
+                             join moz_places    as p on b.fk = p.id
+                             where lower(b.title) like {cond2} 
+                               and lower(b.title) not like {cond1} 
+                             order by frecency desc '''
+                       )
+        results.append(f'''select b.title, visit_count, url, frecency, b.guid 
+                             from moz_bookmarks as b 
+                             join moz_places    as p on b.fk = p.id
+                             where lower(p.url) like {cond2}  
+                             order by frecency desc '''
+                       ) 
 
         return results
 
@@ -144,7 +161,8 @@ class Main(WoxEx):
                     result = {
                         'Title': title,
                         'SubTitle': url,
-                        'IcoPath': 'img\\firefox.ico',
+                        'IcoPath': 'img\\Firefox.ico',
+                        "ContextData": url,
                         'JsonRPCAction': {
                             'method': 'open_url',
                             'parameters': [url]
@@ -164,8 +182,13 @@ class Main(WoxEx):
             }]
         return results
 
-    def open_url(self, url=None):
-        webbrowser.open(url)
+    def open_url(self, url=None, browser_name=None):
+        if not browser_name:
+            webbrowser.open(url)
+        else:
+            browser_path = browser.get_path(browser_name)
+            webbrowser.register(browser_name, None, webbrowser.BackgroundBrowser(browser_path))
+            webbrowser.get(browser_name).open_new_tab(url)
 
     def open_dir(self, dir=None):
         if dir:
