@@ -1,6 +1,8 @@
 # Wox.Plugin.Firefox-Bookmarks
 Firefox Bookmarks Search Plugin for Wox-launcher 
 
+Plugin page: http://www.wox.one/plugin/315
+
 ## Installation
 Install plugin with Wox.
 ```
