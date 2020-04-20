@@ -3,7 +3,6 @@ from util import WoxEx, WoxAPI, load_module, Log
 with load_module():
     import sqlite3
     import configparser
-    import winreg
     import os
     import webbrowser
     import json
@@ -15,6 +14,31 @@ PROFILE_INI = "profiles.ini"
 PLACES_SQLITE = 'places.sqlite'
 CONFIG_JSON = 'config.json'
 
+CONFIG_JSON_PATH = os.path.abspath(os.getcwd()) + '\\' + CONFIG_JSON
+
+DEFAULT_CONFIG = {
+    "db_path" : "",
+    "enable_history" : False
+}
+
+DEFAULT_CONTEXT = [{
+    'Title': f'Open config.json',
+    'SubTitle': f'',
+    'IcoPath': 'img\\config.ico',
+    'JsonRPCAction': {
+        'method': 'open_config',
+        'parameters': [CONFIG_JSON_PATH]
+    }
+},{
+    'Title': f'Enable/Disable history search',
+    'SubTitle': f'',
+    'IcoPath': 'img\\history.ico',
+    'JsonRPCAction': {
+        'method': 'switch_history',
+        'parameters': []
+    }
+}]
+
 
 class Main(WoxEx):
 
@@ -22,9 +46,9 @@ class Main(WoxEx):
 
         q = param.strip()
         if not q:
-            return
+            return DEFAULT_CONTEXT
 
-        db_path = self.get_db()
+        db_path = self.get_config()['db_path']
 
         if not db_path:
             results = [{
@@ -32,8 +56,8 @@ class Main(WoxEx):
                 'SubTitle': f'Please set up the "db_path" in your {CONFIG_JSON} in the plugin dir',
                 'IcoPath': 'img\\firefox.ico',
                 'JsonRPCAction': {
-                    'method': 'open_dir',
-                    'parameters': [os.path.abspath(os.getcwd())]
+                    'method': 'open_config',
+                    'parameters': [CONFIG_JSON_PATH]
                 }
             }]
             return results
@@ -57,56 +81,73 @@ class Main(WoxEx):
                 })
         return results
 
-    def get_db(self) -> str:
+    def get_config(self) -> dict:
 
-        dir = os.path.abspath(os.getcwd())
-        config_file = dir + '\\' + CONFIG_JSON
+        if not path.exists(CONFIG_JSON_PATH):
+            self.set_config({})
 
-        db_path = ''
+        try:
+            with open(CONFIG_JSON_PATH, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        except (IOError, ValueError) as e:
+            return
 
-        if not path.exists(config_file):
+        return data
+
+    def set_config(self, data: dict):
+        if not data:
             db_path = self.search_db()
-            data = dict()
+            data = DEFAULT_CONFIG
             data['db_path'] = db_path
-            with open(config_file, 'w', encoding='utf-8') as outfile:
-                json.dump(data, outfile)
-        else:
-            try:
-                with open(config_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    if data:
-                        db_path = data['db_path']
-            except (IOError, ValueError) as e:
-                return
 
-        return db_path
+        with open(CONFIG_JSON_PATH, 'w', encoding='utf-8') as outfile:
+            json.dump(data, outfile, indent=4)
 
     def generate_sql(self, keyword: str) -> List[str]:
 
         results = []
 
-        cond1 = f"'{keyword}%'"
-        cond2 = f"'%{keyword}%'"
+        new_keyword = '%'.join(keyword.split())
 
-        results.append(f'''select b.title, visit_count, url, frecency, b.guid
-                              from moz_bookmarks as b
-                              join moz_places    as p on b.fk = p.id
-                              where lower(b.title) like {cond1}
-                              order by frecency desc '''
-                       )
-        results.append(f'''select b.title, visit_count, url, frecency, b.guid  
-                             from moz_bookmarks as b 
-                             join moz_places    as p on b.fk = p.id
-                             where lower(b.title) like {cond2} 
-                               and lower(b.title) not like {cond1} 
-                             order by frecency desc '''
-                       )
-        results.append(f'''select b.title, visit_count, url, frecency, b.guid 
-                             from moz_bookmarks as b 
-                             join moz_places    as p on b.fk = p.id
-                             where lower(p.url) like {cond2}  
-                             order by frecency desc '''
-                       ) 
+        cond1 = f"'{new_keyword}%'"
+        cond2 = f"'%{new_keyword}%'"
+
+        enable_history = self.get_config()["enable_history"]
+
+        if enable_history:
+            results.append(f'''select case when b.title is not null then b.title
+                                      else                               p.title
+                                      end as title,
+                                      visit_count,
+                                      url, 
+                                      frecency  
+                               from moz_places               as p 
+                               left outer join moz_bookmarks as b on b.fk = p.id 
+                               where lower(b.title) like {cond2} or lower(p.title) like {cond2}
+                                  or lower(p.url) like {cond2}
+                               order by frecency desc 
+                               limit 100'''
+                           )
+        else:
+            results.append(f'''select b.title, visit_count, url, frecency, b.guid
+                                  from moz_bookmarks as b
+                                  join moz_places    as p on b.fk = p.id
+                                  where lower(b.title) like {cond1}
+                                  order by frecency desc '''
+                           )
+            results.append(f'''select b.title, visit_count, url, frecency, b.guid  
+                                 from moz_bookmarks as b 
+                                 join moz_places    as p on b.fk = p.id
+                                 where lower(b.title) like {cond2} 
+                                   and lower(b.title) not like {cond1} 
+                                 order by frecency desc '''
+                           )
+            results.append(f'''select b.title, visit_count, url, frecency, b.guid 
+                                 from moz_bookmarks as b 
+                                 join moz_places    as p on b.fk = p.id
+                                 where lower(p.url) like {cond2}  
+                                 order by frecency desc '''
+                           )
 
         return results
 
@@ -176,8 +217,8 @@ class Main(WoxEx):
                 'SubTitle': f'Check the "db_path" configuration in your {CONFIG_JSON} in the plugin dir',
                 'IcoPath': 'img\\firefox.ico',
                 'JsonRPCAction': {
-                    'method': 'open_dir',
-                    'parameters': [os.path.abspath(os.getcwd())]
+                    'method': 'open_config',
+                    'parameters': [CONFIG_JSON_PATH]
                 }
             }]
         return results
@@ -190,10 +231,18 @@ class Main(WoxEx):
             webbrowser.register(browser_name, None, webbrowser.BackgroundBrowser(browser_path))
             webbrowser.get(browser_name).open_new_tab(url)
 
-    def open_dir(self, dir=None):
+    def open_config(self, dir=None):
+        self.get_config()
         if dir:
             os.startfile(dir)
 
+    def switch_history(self):
+        data = self.get_config()
+        if data["enable_history"]:
+            data["enable_history"] = False
+        else:
+            data["enable_history"] = True
+        self.set_config(data)
 
 if __name__ == '__main__':
     Main()
