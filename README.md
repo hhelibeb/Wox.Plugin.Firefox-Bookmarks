@@ -10,7 +10,7 @@ wpm install Firefox Bookmarks
 ```
 
 ## ToDoList
-- [ ] History search.
+- [x] History search.
 - [ ] Chrome support.
 - [ ] Fuzzy search.
 - [ ] Delete function.
