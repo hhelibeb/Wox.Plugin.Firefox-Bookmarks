@@ -17,8 +17,8 @@ CONFIG_JSON = 'config.json'
 CONFIG_JSON_PATH = os.path.abspath(os.getcwd()) + '\\' + CONFIG_JSON
 
 DEFAULT_CONFIG = {
-    "db_path" : "",
-    "enable_history" : False
+    "db_path": "",
+    "enable_history": False
 }
 
 DEFAULT_CONTEXT = [{
@@ -29,7 +29,7 @@ DEFAULT_CONTEXT = [{
         'method': 'open_config',
         'parameters': [CONFIG_JSON_PATH]
     }
-},{
+}, {
     'Title': f'Enable/Disable history search',
     'SubTitle': f'',
     'IcoPath': 'img\\history.ico',
@@ -79,6 +79,15 @@ class Main(WoxEx):
                         'parameters': [str(data), browser_name]
                     }
                 })
+        results.append({
+            'Title': f'Delete',
+            'SubTitle': f'',
+            'IcoPath': 'img\\Delete.ico',
+            'JsonRPCAction': {
+                'method': 'delete_item',
+                'parameters': [data]
+            }
+        })
         return results
 
     def get_config(self) -> dict:
@@ -120,31 +129,32 @@ class Main(WoxEx):
                                       end as title,
                                       visit_count,
                                       url, 
-                                      frecency  
-                               from moz_places               as p 
-                               left outer join moz_bookmarks as b on b.fk = p.id 
-                               where lower(b.title) like {cond2} or lower(p.title) like {cond2}
-                                  or lower(p.url) like {cond2}
-                               order by frecency desc 
-                               limit 100'''
+                                      frecency,
+                                      p.id
+                                 from moz_places               as p 
+                                 left outer join moz_bookmarks as b on b.fk = p.id 
+                                 where lower(b.title) like {cond2} or lower(p.title) like {cond2}
+                                    or lower(p.url) like {cond2}
+                                 order by frecency desc 
+                                 limit 100'''
                            )
         else:
-            results.append(f'''select b.title, visit_count, url, frecency, b.guid
+            results.append(f'''select b.title, visit_count, url, frecency, b.id
                                   from moz_bookmarks as b
                                   join moz_places    as p on b.fk = p.id
                                   where lower(b.title) like {cond1}
                                   order by frecency desc '''
                            )
-            results.append(f'''select b.title, visit_count, url, frecency, b.guid  
-                                 from moz_bookmarks as b 
-                                 join moz_places    as p on b.fk = p.id
+            results.append(f'''select b.title, visit_count, url, frecency, b.id  
+                                 from moz_bookmarks            as b 
+                                 left outer join moz_places    as p on b.fk = p.id
                                  where lower(b.title) like {cond2} 
                                    and lower(b.title) not like {cond1} 
                                  order by frecency desc '''
                            )
-            results.append(f'''select b.title, visit_count, url, frecency, b.guid 
-                                 from moz_bookmarks as b 
-                                 join moz_places    as p on b.fk = p.id
+            results.append(f'''select b.title, visit_count, url, frecency, b.id 
+                                 from moz_bookmarks            as b 
+                                 left outer join moz_places    as p on b.fk = p.id
                                  where lower(p.url) like {cond2}  
                                  order by frecency desc '''
                            )
@@ -199,18 +209,20 @@ class Main(WoxEx):
                     result = dict()
                     title = item[0]
                     url = item[2]
+                    id  = item[4]
                     result = {
                         'Title': title,
                         'SubTitle': url,
                         'IcoPath': 'img\\Firefox.ico',
-                        "ContextData": url,
+                        "ContextData": url + f"                                                                "
+                                             f"                                                                "
+                                             f"                                                         id={id}",
                         'JsonRPCAction': {
                             'method': 'open_url',
                             'parameters': [url]
                         }
                     }
                     results += [result]
-            conn.close()
         except sqlite3.OperationalError:
             results = [{
                 'Title': f'Cannot get data from "{db_path}"',
@@ -221,6 +233,9 @@ class Main(WoxEx):
                     'parameters': [CONFIG_JSON_PATH]
                 }
             }]
+        finally:
+            conn.close()
+
         return results
 
     def open_url(self, url=None, browser_name=None):
@@ -237,12 +252,35 @@ class Main(WoxEx):
             os.startfile(dir)
 
     def switch_history(self):
-        data = self.get_config()
-        if data["enable_history"]:
-            data["enable_history"] = False
+        config = self.get_config()
+        if config['enable_history']:
+            config['enable_history'] = False
         else:
-            data["enable_history"] = True
-        self.set_config(data)
+            config['enable_history'] = True
+        self.set_config(config)
+
+    def delete_item(self, cdata: str):
+        config = self.get_config()
+        index = cdata.find(' id=')
+        if index == -1:
+            return
+        index = index + 4
+        sql = ''
+        if config['enable_history']:
+            sql = f'delete from moz_places where id = {cdata[index:]}'
+        else:
+            sql = f'delete from moz_bookmarks where id = {cdata[index:]}'
+        if sql:
+            try:
+                conn = sqlite3.connect(config['db_path'])
+                c = conn.cursor()
+                c.execute(sql)
+                conn.commit()
+            except sqlite3.OperationalError:
+                raise
+            finally:
+                conn.close()
+
 
 if __name__ == '__main__':
     Main()
